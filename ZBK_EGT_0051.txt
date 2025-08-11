@@ -1,0 +1,666 @@
+*&---------------------------------------------------------------------*
+*& Report ZBK_EGT_0051
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZBK_EGT_0051.
+
+INCLUDE zbk_egt_0051_top.
+INCLUDE zbk_egt_0051_cls.
+INCLUDE zbk_egt_0051_pbo.
+INCLUDE zbk_egt_0051_pai.
+INCLUDE zbk_egt_0051_frm.
+
+
+
+START-OF-SELECTION.
+  PERFORM get_data.
+  PERFORM set_fc.
+  PERFORM set_layout.
+
+  CALL SCREEN 0100.
+
+*&---------------------------------------------------------------------*
+*& Include          ZBM_OOALV_ODEV_TOP
+*&---------------------------------------------------------------------*
+
+TABLES: vbak,
+        vbap.
+
+
+DATA:gt_list        TYPE TABLE OF zbm_alv_s, "int table,
+     gs_list        TYPE zbm_alv_s,
+     gt_fieldcat    TYPE lvc_t_fcat,
+     gt_cikti       TYPE TABLE OF zbm_alv_s.
+
+
+
+DATA: go_grid TYPE REF TO cl_gui_alv_grid,
+      go_cont TYPE REF TO cl_gui_custom_container.
+
+
+DATA:gs_layout TYPE lvc_s_layo.
+
+
+CLASS:cl_event_receiver DEFINITION DEFERRED.
+DATA: go_event_receiver TYPE REF TO cl_event_receiver.
+
+FIELD-SYMBOLS:<gfs_fieldcat> TYPE lvc_s_fcat.
+
+START-OF-SELECTION.
+  SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+    SELECT-OPTIONS:so_vbeln FOR vbak-vbeln,
+     s_ernam  FOR vbak-ernam NO INTERVALS NO-EXTENSION,
+     s_matnr  FOR vbap-matnr NO INTERVALS NO-EXTENSION.
+  SELECTION-SCREEN END OF BLOCK b1.
+
+DATA: gt_rows TYPE lvc_t_roid,
+      gs_rows TYPE lvc_s_roid.
+
+
+  DATA gv_hata(1).
+
+
+DATA: lt_sort TYPE lvc_t_sort,
+      gs_sort TYPE lvc_s_sort.
+
+*&---------------------------------------------------------------------*
+*& Include          ZBK_EGT_0051_CLS
+*&---------------------------------------------------------------------*
+CLASS cl_event_receiver DEFINITION.
+  PUBLIC SECTION.
+
+    METHODS handle_toolbar
+      FOR EVENT toolbar OF cl_gui_alv_grid
+      IMPORTING
+        e_object
+        e_interactive.
+
+    METHODS handle_user_command
+      FOR EVENT user_command OF cl_gui_alv_grid
+      IMPORTING
+        e_ucomm.
+
+    METHODS handle_hotspot_click
+      FOR EVENT hotspot_click OF cl_gui_alv_grid
+      IMPORTING
+        e_row_id
+        e_column_id.
+
+
+ENDCLASS.
+CLASS cl_event_receiver IMPLEMENTATION.
+  METHOD handle_toolbar.
+    DATA: ls_toolbar TYPE stb_button.
+
+    CLEAR: ls_toolbar.
+    ls_toolbar-function = '&SP'.
+    ls_toolbar-text = 'Sipariş Numarası'.
+    ls_toolbar-icon = '@3Y@'.
+    ls_toolbar-disabled = abap_false.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+
+    CLEAR: ls_toolbar.
+    ls_toolbar-function = '&SF'.
+    ls_toolbar-text = 'SMARTFORM'.
+    ls_toolbar-icon = '@0X@'.
+    ls_toolbar-quickinfo = 'Smartform Çıktısı'.
+    ls_toolbar-disabled = abap_false.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+
+    CLEAR: ls_toolbar.
+    ls_toolbar-function = '&MAIL'.
+    ls_toolbar-text = 'MAIL'.
+    ls_toolbar-icon = '@1S@'.
+    ls_toolbar-quickinfo = 'Mail Gönderme'.
+    ls_toolbar-disabled = abap_false.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+
+  ENDMETHOD.
+
+  METHOD handle_user_command.
+    CASE e_ucomm.
+      WHEN  '&SP'.
+        DATA:lt_rows TYPE lvc_t_row,
+             ls_rows TYPE lvc_s_row,
+             lv_sayi TYPE int4.
+
+
+        CALL METHOD go_grid->get_selected_rows
+          IMPORTING
+            et_index_rows = lt_rows.
+
+
+
+        IF lt_rows IS INITIAL.
+          MESSAGE 'Lütfen Satır Seçiniz!' TYPE 'I'.
+          EXIT.
+        ENDIF.
+
+        LOOP AT lt_rows INTO ls_rows.
+          DATA: lv_rowcheck TYPE int8.
+          lv_rowcheck = sy-tabix.
+        ENDLOOP.
+
+
+        IF lv_rowcheck NE 1.
+          MESSAGE 'Lütfen en fazla bir satır seçiniz' TYPE 'I'.
+        ELSE.
+
+          READ TABLE gt_list ASSIGNING FIELD-SYMBOL(<gfs_fieldcat>)
+     INDEX ls_rows-index.
+
+
+          IF sy-subrc EQ 0.
+            MESSAGE <gfs_fieldcat>-vbeln TYPE 'I'.
+
+          ENDIF.
+        ENDIF.
+
+    WHEN '&SF'.
+        CHECK gv_hata EQ ''.
+        DATA: lv_ans TYPE char1.
+        PERFORM confrim USING lv_ans.
+        IF lv_ans EQ 1.
+          PERFORM sform_yazdir.
+        ENDIF.
+         WHEN '&MAIL'.
+           PERFORM sendmail.
+    ENDCASE.
+
+
+  ENDMETHOD.
+
+  METHOD handle_hotspot_click.
+
+    READ TABLE gt_list INTO gs_list INDEX e_row_id-index.
+    IF sy-subrc EQ 0.
+      SET PARAMETER ID 'AUN' FIELD gs_list-vbeln.
+      CALL TRANSACTION 'VA03' AND SKIP FIRST SCREEN.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& Include          ZBK_EGT_0051_PBO
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Module STATUS_0100 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_0100 OUTPUT.
+ SET PF-STATUS '0100'.
+ SET TITLEBAR '0100'.
+
+   PERFORM display_alv.
+
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*& Include          ZBK_EGT_0051_PAI
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+  CASE sy-ucomm.
+    WHEN '&BACK'.
+      set SCREEN 0.
+  ENDCASE.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*& Include          ZBM_EGT_0051_FRM
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form display_alv
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM display_alv .
+
+  IF go_grid IS INITIAL.
+    CREATE OBJECT go_cont
+      EXPORTING
+        container_name = 'CC_ALV'.
+
+
+    CREATE OBJECT go_grid
+      EXPORTING
+        i_parent = go_cont.
+
+
+    "methods"
+    CREATE OBJECT go_event_receiver.
+    SET HANDLER go_event_receiver->handle_hotspot_click FOR go_grid.
+    SET HANDLER go_event_receiver->handle_toolbar FOR go_grid.
+    SET HANDLER go_event_receiver->handle_user_command FOR go_grid.
+
+
+
+
+    gs_sort-spos = '1'.
+    gs_sort-fieldname = 'VBELN'.
+    gs_sort-up = abap_true.
+    APPEND gs_sort TO lt_sort.
+
+    CALL METHOD go_grid->set_table_for_first_display
+      EXPORTING
+        is_layout       = gs_layout
+      CHANGING
+        it_outtab       = gt_list
+        it_fieldcatalog = gt_fieldcat
+        it_sort         = lt_sort.
+  ELSE.
+    CALL METHOD go_grid->refresh_table_display.
+  ENDIF.
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_data .
+  SELECT
+  a~vbeln,
+   b~posnr,
+   a~erdat,
+   a~erzet,
+   a~ernam,
+   e~name_text,
+   a~audat,
+   a~vbtyp,
+   j~ddtext,
+   a~auart,
+   f~bezei,
+   a~netwr,
+   a~waerk,
+   a~vkorg,
+   g~vtext,
+   a~vtweg,
+   h~vtext AS vtext2,
+   a~spart,
+   k~vtext AS vtext3,
+   b~matnr,
+   c~maktx
+   FROM vbak AS a
+   INNER JOIN vbap AS b
+   ON a~vbeln = b~vbeln
+    INNER JOIN makt AS c
+   ON c~matnr EQ b~matnr
+   AND c~spras = @sy-langu
+   INNER JOIN usr21 AS d
+   ON a~ernam EQ d~bname
+   INNER JOIN adrp AS e
+   ON e~persnumber EQ d~persnumber
+   INNER JOIN tvakt AS f
+   ON f~auart = a~auart
+   AND f~spras = @sy-langu
+   INNER JOIN tvkot AS g
+   ON g~vkorg = a~vkorg
+   AND g~spras = @sy-langu
+   INNER JOIN tvtwt AS h
+   ON h~vtweg = a~vtweg
+   AND h~spras = @sy-langu
+   INNER JOIN tspat AS k
+   ON k~spart = a~spart
+   AND k~spras = @sy-langu
+   INNER JOIN dd07t AS j
+   ON j~domname = 'VBTYP'
+   AND j~domvalue_l = a~vbtyp
+   AND j~ddlanguage = @sy-langu
+ INTO CORRESPONDING FIELDS OF TABLE @gt_list
+   WHERE a~vbeln IN @so_vbeln
+        AND a~ernam IN @s_ernam
+        AND b~matnr IN @s_matnr.
+  SORT gt_list BY vbeln posnr.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_fc
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM set_fc .
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name = 'ZBM_ALV_S'
+    CHANGING
+      ct_fieldcat      = gt_fieldcat.
+
+  LOOP AT gt_fieldcat ASSIGNING <gfs_fieldcat>.
+    CASE <gfs_fieldcat>-fieldname.
+      WHEN  'VBELN'.
+        <gfs_fieldcat>-hotspot = abap_true.
+      WHEN 'SELKZ'.
+        <gfs_fieldcat>-tech = abap_true.
+    ENDCASE.
+
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_layout
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM set_layout .
+  CLEAR:gs_layout.
+  gs_layout-cwidth_opt = abap_true.
+  gs_layout-zebra = abap_true.
+  gs_layout-sel_mode = 'D'.
+ENDFORM.
+*-----------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form adobeform_yazdir
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM adobeform_yazdir .
+  CLEAR: gt_cikti.
+  DATA: lv_baslik       TYPE char100,
+        lv_toplam       TYPE int4,
+        lt_cikti_vbeln  TYPE TABLE OF zbm_alv_s,
+        gv_name         TYPE funcnam,
+        ls_outputparams TYPE sfpoutputparams,
+        ls_docparams    TYPE sfpdocparams,
+        ls_formoutput   TYPE fpformoutput.
+
+  lv_baslik = 'SATIŞ SİPARİŞ RAPORU'.
+
+  CALL METHOD go_grid->get_selected_rows
+    IMPORTING
+      et_row_no = gt_rows.
+
+  LOOP AT gt_rows INTO gs_rows.
+    READ TABLE gt_list ASSIGNING FIELD-SYMBOL(<fs_list>) INDEX gs_rows-row_id.
+    APPEND <fs_list> TO gt_cikti.
+  ENDLOOP.
+
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = 'ZBM_AF_3'
+    IMPORTING
+      e_funcname = gv_name.
+  .
+  CHECK sy-subrc EQ 0.
+
+  CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = ls_outputparams
+    EXCEPTIONS
+      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+
+  CHECK sy-subrc EQ 0.
+
+  LOOP AT gt_cikti ASSIGNING FIELD-SYMBOL(<fs_cikti>).
+    APPEND <fs_cikti> TO lt_cikti_vbeln.
+
+    AT END OF vbeln.
+
+
+
+      CALL FUNCTION gv_name
+        EXPORTING
+          i_baslik           = lv_baslik
+          i_vkorg            = <fs_cikti>-vkorg
+          i_vbeln            = <fs_cikti>-vbeln
+          it_items           = lt_cikti_vbeln
+        IMPORTING
+          /1bcdwb/formoutput = ls_formoutput.
+      IF sy-subrc <> 0.
+
+      ENDIF.
+      CLEAR: lt_cikti_vbeln.
+
+
+    ENDAT.
+  ENDLOOP.
+
+  CHECK sy-subrc EQ 0.
+  CALL FUNCTION 'FP_JOB_CLOSE'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form sform_yazdir
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM sform_yazdir .
+
+  CLEAR: gt_cikti.
+  DATA: lv_fm_name     TYPE  rs38l_fnam,
+        lv_baslık      TYPE char100,
+        lt_cikti_vbeln TYPE TABLE OF zbm_alv_s.
+
+
+  CALL METHOD go_grid->get_selected_rows
+    IMPORTING
+      et_row_no = gt_rows.
+
+
+  LOOP AT gt_rows INTO gs_rows.
+    READ TABLE gt_list ASSIGNING FIELD-SYMBOL(<fs_list>) INDEX gs_rows-row_id.
+    IF sy-subrc EQ 0.
+      APPEND <fs_list> TO gt_cikti.
+    ENDIF.
+  ENDLOOP.
+
+
+  lv_baslik = 'SATIS SIPARIS RAPORU'.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZBK_SF_0027'
+    IMPORTING
+      fm_name  = lv_fm_name.
+
+  DATA: ls_control TYPE ssfctrlop.
+  ls_control-no_open = 'X'.
+  ls_control-no_close = 'X'.
+
+
+
+  CALL FUNCTION 'SSF_OPEN'
+    EXPORTING
+      control_parameters = ls_control.
+
+
+
+  LOOP AT gt_cikti ASSIGNING FIELD-SYMBOL(<fs_cikti>).
+    APPEND <fs_cikti> TO lt_cikti_vbeln.
+
+    AT END OF vbeln.
+*
+
+      CALL FUNCTION lv_fm_name
+        EXPORTING
+          control_parameters = ls_control
+          i_baslik           = lv_baslik
+          i_vkorg            = <fs_cikti>-vkorg
+          i_vbeln            = <fs_cikti>-vbeln
+        TABLES
+          it_cikti           = lt_cikti_vbeln
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+      ENDIF.
+      CLEAR:lt_cikti_vbeln.
+    ENDAT.
+  ENDLOOP.
+
+
+  CALL FUNCTION 'SSF_CLOSE'
+    EXCEPTIONS
+      formatting_error = 1
+      internal_error   = 2
+      send_error       = 3
+      OTHERS           = 4.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form confrim
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_ANS
+*&---------------------------------------------------------------------*
+FORM confrim  USING    p_lv_ans TYPE char1.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      text_question         = 'Seçilen satırların çıktısını almak istiyor musunuz?'
+      text_button_1         = 'Evet'(001)
+      icon_button_1         = 'ICON_OKAY'
+      text_button_2         = 'Hayır'(002)
+      icon_button_2         = 'ICON_CANCEL'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = p_lv_ans.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form sendmail
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM sendmail .
+  CLEAR: gt_cikti.
+  call METHOD go_grid->get_selected_rows
+    IMPORTING
+
+      et_row_no     = gt_rows                 " Numeric IDs of Selected Rows
+    .
+
+  LOOP AT gt_rows INTO gs_rows.
+    READ TABLE gt_list ASSIGNING FIELD-SYMBOL(<fs_list>) index gs_rows-row_id.
+    IF sy-subrc eq 0.
+      APPEND <fs_list> to gt_cikti.
+    ENDIF.
+
+    DATA: lo_gbt       TYPE REF TO cl_gbt_multirelated_service,
+          lo_bcs       TYPE REF TO cl_bcs,
+          lo_doc_bcs   TYPE REF TO cl_document_bcs,
+          lo_recipient TYPE REF TO if_recipient_bcs,
+          lt_soli      TYPE TABLE OF soli,
+          ls_soli      TYPE soli,
+          lv_status    TYPE bcs_rqst,
+          lv_content   TYPE string.
+
+    DATA: gv_sayi  TYPE char13,
+          gs_cikti LIKE LINE OF gt_cikti.
+
+    DATA: gv_attachment_size TYPE sood-objlen,
+          gt_att_content_hex TYPE solix_tab,
+          gv_att_content     TYPE string,
+          gv_att_line        TYPE string.
+
+    CREATE OBJECT lo_gbt.
+    lv_content = 'Ekler Kısmındaki Excel Dosyanızı Kontrol Edebilirsiniz.'.
+    lt_soli = cl_document_bcs=>string_to_soli( lv_content ).
+
+     CALL METHOD lo_gbt->set_main_html
+    EXPORTING
+      content = lt_soli.
+
+  lo_doc_bcs = cl_document_bcs=>create_from_multirelated(
+                 i_subject          = 'EXCEL'
+                 i_multirel_service = lo_gbt ).
+
+    LOOP AT gt_cikti INTO gs_cikti.
+      CLEAR: gv_sayi.
+      gv_sayi = gs_cikti-netwr.
+      CONCATENATE gs_cikti-posnr
+                  gs_cikti-matnr
+                  gs_cikti-maktx
+                  gs_cikti-waerk
+                  gv_sayi
+                  INTO gv_att_line
+                  SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+      IF sy-tabix EQ 1.
+           gv_att_content = gv_att_line.
+      ELSE.
+        CONCATENATE gv_att_content
+                    gv_att_line
+                    INTO gv_att_content
+                    SEPARATED BY cl_abap_char_utilities=>newline.
+      ENDIF.
+    ENDLOOP.
+
+    cl_bcs_convert=>string_to_solix(
+      EXPORTING
+        iv_string   = gv_att_content                 " Input data
+        iv_codepage = '4103'                 " Target Code Page in SAP Form  (Default = SAPconnect Setting)
+        iv_add_bom  = 'X'                 " Add Byte-Order Mark
+      IMPORTING
+        et_solix    =  gt_att_content_hex                " Output data
+        ev_size     =  gv_attachment_size                " Size of Document Content
+    ).
+    lo_doc_bcs->add_attachment(
+      EXPORTING
+        i_attachment_type     =   'xls'               " Document Class for Attachment
+        i_attachment_subject  =   'excel'              " Attachment Title
+        i_attachment_size     =   gv_attachment_size               " Size of Document Content
+        i_att_content_hex     =   gt_att_content_hex               " Content (Binary)
+    ).
+
+    lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                     i_address_string = 'beyza.murat@prodea.com.tr'
+                   ).
+
+    lo_bcs = cl_bcs=>create_persistent( ).
+    lo_bcs->set_document( i_document = lo_doc_bcs  ).
+    lo_bcs->add_recipient(
+      EXPORTING
+        i_recipient  =  lo_recipient                " Recipient of Message
+    ).
+
+    lv_status = 'N'.
+
+    call METHOD lo_bcs->set_status_attributes
+      EXPORTING
+        i_requested_status =  lv_status                " Requested Status
+      .
+
+    lo_bcs->send(
+*        i_with_error_screen = space
+    ).
+    COMMIT WORK.
+
+    IF sy-subrc EQ 0.
+      MESSAGE 'Mail Gönderildi. Lütfen SOST Kısmından Kontrol Ediniz!' TYPE 'I'.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
